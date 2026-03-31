@@ -1,0 +1,45 @@
+import json
+import base64
+import os
+import boto3
+
+s3_client = boto3.resource('s3')
+s3_bucket_name = "kinesis-data-lambda-demo-ai"
+
+def data_dump(sample_string):
+    client = boto3.client('dynamodb')
+    data = json.loads(sample_string)
+    response = client.put_item(
+    Item={
+        'sensorId': {
+            'N': '{}'.format(data['sensorId']),
+        },
+        'currentTemperature': {
+            'S': '{}'.format(data['currentTemperature']),
+        },
+        'status': {
+            'S': '{}'.format(data['status']),
+        },
+    },
+    
+    TableName='sensordata',
+)
+
+
+
+def lambda_handler(event, context):
+    print("event collected is {}".format(event))
+    for record in event['Records'] :
+        sample_string_bytes = base64.b64decode(record['kinesis']['data'])
+        sample_string = sample_string_bytes.decode("ascii")
+        print(type(sample_string))        
+        s3_file_name =  record['kinesis']['sequenceNumber']+".json"        
+        local_file_path = "/tmp/"+s3_file_name
+        print("file path:{}".format(local_file_path))
+        
+        with open(local_file_path, 'w') as fp:
+            json.dump(json.loads(sample_string), fp)
+        data_dump(sample_string)
+        s3_client.meta.client.upload_file(local_file_path, s3_bucket_name, s3_file_name)        
+        os.remove(local_file_path)
+        
